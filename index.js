@@ -2,11 +2,38 @@ require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const express = require('express');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 const app = express();
 const port = process.env.PORT || 5000;
 
-app.use(cors());
+app.use(cors({
+    origin: ['http://localhost:5173'],
+    credentials: true
+}));
 app.use(express.json());
+app.use(cookieParser());
+
+
+const verifyToken = (req, res, next) => {
+    // console.log(req.cookies?.token)
+
+    const token = req?.cookies?.token;
+
+    if (!token) {
+        return res.status(401).send({ message: 'Unauthorized access' })
+    }
+
+    jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+        if (err) {
+            return res.status(401).send({ message: 'Unauthorized access' })
+        }
+        req.decoded = decoded;
+        next();
+    })
+
+}
+
 
 app.get('/', (req, res) => {
     res.send('Marathon System is running')
@@ -40,6 +67,29 @@ async function run() {
         const marathonCollection = client.db('marathonSystem').collection('marathons');
         const registrationsCollection = client.db('marathonSystem').collection('registrations');
 
+        // Auth related APIs
+        app.post('/jwt', async (req, res) => {
+            const user = req.body;
+            const token = jwt.sign(user, process.env.JWT_SECRET, { expiresIn: '1h' })
+            res
+                .cookie('token', token, {
+                    httpOnly: true,
+                    secure: false,
+
+                })
+                .send({ success: true });
+        })
+
+        app.post('/logout', (req, res) => {
+            res
+                .clearCookie('token', {
+                    httpOnly: true,
+                    secure: false
+                })
+                .send({ success: true })
+        })
+
+        // marathon related apis
         app.get('/marathons', async (req, res) => {
             const cursor = marathonCollection.find().limit(6);
             const result = await cursor.toArray();
@@ -85,12 +135,22 @@ async function run() {
             res.send(result);
         })
 
-        app.get('/myMarathons', async (req, res) => {
+        app.get('/myMarathons', verifyToken, async (req, res) => {
             const email = req.query.email;
             const filter = { email };
 
+            if (req.decoded.email !== req.query.email) {
+                return res.status(403).send({ message: 'Forbidden access' })
+            }
+
             const cursor = marathonCollection.find(filter);
             const result = await cursor.toArray();
+
+            for (const application of result) {
+                const query1 = { _id: new ObjectId(application.marathonId) };
+                application.marathonDetails = await marathonCollection.findOne(query1);
+            }
+
             res.send(result);
         });
 
@@ -108,15 +168,21 @@ async function run() {
             res.send(result);
         });
 
-        app.get("/myApply", async (req, res) => {
+        app.get("/myApply", verifyToken, async (req, res) => {
             const email = req.query.email;
-            // if (!email) {
-            //     return res.status(400).json({ error: "Email query parameter is required" });
-            // }
-
             const filter = { userEmail: email };
+
+            if (req.decoded.email !== req.query.email) {
+                return res.status(403).send({ message: 'Forbidden access' })
+            }
+
             const cursor = registrationsCollection.find(filter);
             const result = await cursor.toArray();
+
+            for (const application of result) {
+                const query1 = { _id: new ObjectId(application.marathonId) };
+                application.marathonDetails = await marathonCollection.findOne(query1);
+            }
 
             res.send(result);
         });
