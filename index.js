@@ -41,7 +41,7 @@ async function run() {
         const registrationsCollection = client.db('marathonSystem').collection('registrations');
 
         app.get('/marathons', async (req, res) => {
-            const cursor = marathonCollection.find();
+            const cursor = marathonCollection.find().limit(6);
             const result = await cursor.toArray();
             res.send(result);
         })
@@ -85,19 +85,39 @@ async function run() {
             res.send(result);
         })
 
-
-        app.post('/registration', async (req, res) => {
-            const registrationData = req.body;
-            const result = await registrationsCollection.insertOne(registrationData);
-            res.send(result);
-        });
-
         app.get('/myMarathons', async (req, res) => {
             const email = req.query.email;
             const filter = { email };
 
             const cursor = marathonCollection.find(filter);
             const result = await cursor.toArray();
+            res.send(result);
+        });
+
+
+
+        app.post('/registrations', async (req, res) => {
+            const registrationData = req.body;
+            const result = await registrationsCollection.insertOne(registrationData);
+            res.send(result);
+        });
+
+        app.get('/registrations', async (req, res) => {
+            const cursor = registrationsCollection.find();
+            const result = await cursor.toArray();
+            res.send(result);
+        });
+
+        app.get("/myApply", async (req, res) => {
+            const email = req.query.email;
+            // if (!email) {
+            //     return res.status(400).json({ error: "Email query parameter is required" });
+            // }
+
+            const filter = { userEmail: email };
+            const cursor = registrationsCollection.find(filter);
+            const result = await cursor.toArray();
+
             res.send(result);
         });
 
