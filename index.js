@@ -1,5 +1,5 @@
 require("dotenv").config();
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const express = require('express');
 const cors = require('cors');
 const app = express();
@@ -38,6 +38,7 @@ async function run() {
 
         // marathon related apis
         const marathonCollection = client.db('marathonSystem').collection('marathons');
+        const registrationsCollection = client.db('marathonSystem').collection('registrations');
 
         app.get('/marathons', async (req, res) => {
             const cursor = marathonCollection.find();
@@ -50,6 +51,56 @@ async function run() {
             const result = await marathonCollection.insertOne(newMarathon);
             res.send(result);
         })
+
+        app.get('/marathons/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) }
+            const marathon = await marathonCollection.findOne(query);
+            res.send(marathon);
+        })
+
+        app.delete('/marathons/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+            const result = await marathonCollection.deleteOne(query);
+            res.send(result);
+        })
+
+        app.put('/marathons/:id', async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: new ObjectId(id) }
+            const options = { upsert: true };
+            const updatedMarathon = req.body;
+
+            const marathon = {
+                $set: {
+                    title: updatedMarathon.title,
+                    location: updatedMarathon.location,
+                    distance: updatedMarathon.distance,
+                    description: updatedMarathon.description
+                }
+            }
+
+            const result = await marathonCollection.updateOne(filter, marathon, options);
+            res.send(result);
+        })
+
+
+        app.post('/registration', async (req, res) => {
+            const registrationData = req.body;
+            const result = await registrationsCollection.insertOne(registrationData);
+            res.send(result);
+        });
+
+        app.get('/myMarathons', async (req, res) => {
+            const email = req.query.email;
+            const filter = { email };
+
+            const cursor = marathonCollection.find(filter);
+            const result = await cursor.toArray();
+            res.send(result);
+        });
+
 
     } finally {
         // Ensures that the client will close when you finish/error
